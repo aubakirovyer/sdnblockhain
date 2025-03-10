@@ -1,0 +1,23 @@
+{
+  "name": "sdnblockhain",
+  "version": "1.0.0",
+  "description": "This repository contains the implementation of an SDN (Software-Defined Networking) integrated with blockchain technology as a diploma project for CSc'25 students.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aubakirovyer/sdnblockhain.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/aubakirovyer/sdnblockhain/issues"
+  },
+  "homepage": "https://github.com/aubakirovyer/sdnblockhain#readme",
+  "dependencies": {
+    "ganache": "^7.9.2"
+  }
+}
