@@ -2,6 +2,10 @@
 
 import requests
 import networkx as nx
+# import matplotlib.pyplot as plt
+# modified matplotlib import to not cause crash in ubuntu 22.04 gnome GTK4 environment
+import matplotlib
+matplotlib.use('TkAgg') 
 import matplotlib.pyplot as plt
 
 class FloodlightVisualizer:

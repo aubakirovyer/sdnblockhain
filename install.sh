@@ -166,6 +166,7 @@ echo ""
 echo "===== STEP 7: Ganache (via NPM) ====="
 echo "Installing Ganache globally with npm..."
 sudo npm install --global ganache
+sudo npm install --global truffle
 if [ $? -ne 0 ]; then
   echo "[ERROR] Ganache installation failed."
 fi
