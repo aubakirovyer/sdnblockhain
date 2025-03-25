@@ -83,86 +83,158 @@ class FloodlightVisualizer:
                 direction=link.get("direction")
             )
 
-    def add_hosts(self):
-        """
-        Reads /wm/device/ data, and for each discovered host with a valid
-        attachmentPoint, adds an edge host->switch.
+    # def add_hosts(self):
+    #     """
+    #     Reads /wm/device/ data, and for each discovered host with a valid
+    #     attachmentPoint, adds an edge host->switch.
 
-        - Host labeled as "h{ip}"
-        - Switch labeled as "s{dpid}"
-        """
+    #     - Host labeled as "h{ip}"
+    #     - Switch labeled as "s{dpid}"
+    #     """
+    #     data = self.fetch_json(self.device_url)
+    #     if not data:
+    #         print("[Warning] /wm/device/ returned no data. No hosts added.")
+    #         return
+
+    #     # Some Floodlight versions respond with a list of devices directly
+    #     # Others respond with { "devices": [ ... ] }
+    #     if isinstance(data, dict) and "devices" in data:
+    #         devices = data["devices"]
+    #     elif isinstance(data, list):
+    #         devices = data
+    #     else:
+    #         # Unknown shape
+    #         print("[Warning] /wm/device/ had an unexpected JSON shape. No hosts added.")
+    #         return
+
+    #     for dev in devices:
+    #         # dev might be something like:
+    #         # {
+    #         #   "mac": "00:00:00:00:00:01",
+    #         #   "ipv4": [ "10.0.0.1" ],
+    #         #   "ipv6": [],
+    #         #   "vlan": [ "none" ],
+    #         #   "attachmentPoint": [
+    #         #       {
+    #         #         "switch": "00:00:00:00:00:00:00:01" OR "switchDPID": "00:...",
+    #         #         "port": 1
+    #         #       }
+    #         #   ],
+    #         #   ...
+    #         # }
+    #         if not isinstance(dev, dict):
+    #             continue
+
+    #         # MAC is optional in some builds, but let's see if it’s present
+    #         mac = dev.get("mac", "")
+    #         # IPv4 might be a list
+    #         ipv4_list = dev.get("ipv4", [])
+
+    #         # Must have an attachmentPoint
+    #         ap_list = dev.get("attachmentPoint", [])
+    #         if not ap_list or not isinstance(ap_list, list):
+    #             continue
+
+    #         # We'll take just the first AP
+    #         ap = ap_list[0]
+    #         # Some versions call it "switch", others "switchDPID"
+    #         switch_dpid = ap.get("switch") or ap.get("switchDPID")
+    #         port = ap.get("port")
+
+    #         if not switch_dpid or port is None:
+    #             # Invalid / incomplete
+    #             continue
+
+    #         # If we have no IPv4 address, skip, or we can fallback to MAC-based labeling
+    #         if len(ipv4_list) == 0:
+    #             # fallback to host label by mac
+    #             host_label = f"h{mac}" if mac else None
+    #         else:
+    #             host_label = f"h{ipv4_list[0]}"
+
+    #         if not host_label:
+    #             continue
+
+    #         # Add the host as a node
+    #         self.topology.add_node(host_label, type="host")
+
+    #         # The switch label must match what we used in add_switch_links
+    #         switch_label = f"s{switch_dpid}"
+    #         # If the switch node doesn't exist yet, add it (just to ensure it’s in the graph)
+    #         self.topology.add_node(switch_label, type="switch")
+
+    #         # Add edge host->switch
+    #         self.topology.add_edge(
+    #             host_label,
+    #             switch_label,
+    #             port=port
+    #         )
+
+    def add_hosts(self):
         data = self.fetch_json(self.device_url)
         if not data:
             print("[Warning] /wm/device/ returned no data. No hosts added.")
             return
-
-        # Some Floodlight versions respond with a list of devices directly
-        # Others respond with { "devices": [ ... ] }
+    
+        # Some Floodlight versions respond with a list of devices or { "devices": [...] }
         if isinstance(data, dict) and "devices" in data:
             devices = data["devices"]
         elif isinstance(data, list):
             devices = data
         else:
-            # Unknown shape
             print("[Warning] /wm/device/ had an unexpected JSON shape. No hosts added.")
             return
-
+    
         for dev in devices:
             # dev might be something like:
-            # {
-            #   "mac": "00:00:00:00:00:01",
-            #   "ipv4": [ "10.0.0.1" ],
-            #   "ipv6": [],
-            #   "vlan": [ "none" ],
-            #   "attachmentPoint": [
-            #       {
-            #         "switch": "00:00:00:00:00:00:00:01" OR "switchDPID": "00:...",
-            #         "port": 1
-            #       }
-            #   ],
-            #   ...
-            # }
+            #  {
+            #    "mac": "22:a6:26:68:e1:4e",
+            #    "ipv4": [],
+            #    "ipv6": ["fe80::20a6:26ff:fe68:e14e"],
+            #    "attachmentPoint": [ { "switch": "00:00:00:00:00:00:01:03", "port": 1 }, ...],
+            #    ...
+            #  }
             if not isinstance(dev, dict):
                 continue
-
-            # MAC is optional in some builds, but let's see if it’s present
-            mac = dev.get("mac", "")
-            # IPv4 might be a list
+            
+            mac_str = dev.get("mac", "")  # e.g. "22:a6:26:68:e1:4e"
             ipv4_list = dev.get("ipv4", [])
-
+    
             # Must have an attachmentPoint
             ap_list = dev.get("attachmentPoint", [])
             if not ap_list or not isinstance(ap_list, list):
                 continue
-
-            # We'll take just the first AP
+            
             ap = ap_list[0]
-            # Some versions call it "switch", others "switchDPID"
             switch_dpid = ap.get("switch") or ap.get("switchDPID")
             port = ap.get("port")
-
+    
             if not switch_dpid or port is None:
-                # Invalid / incomplete
                 continue
-
-            # If we have no IPv4 address, skip, or we can fallback to MAC-based labeling
-            if len(ipv4_list) == 0:
-                # fallback to host label by mac
-                host_label = f"h{mac}" if mac else None
-            else:
+            
+            # Build the host label:
+            # If IPv4 is present, label "h10.0.0.X", else fallback to "hMAC"
+            if ipv4_list:
                 host_label = f"h{ipv4_list[0]}"
-
+            else:
+                # fallback to MAC if no IPv4
+                # remove any bracket or quote artifacts if they exist
+                # (some versions of Floodlight might return an array for 'mac'; normally it's just a string)
+                if isinstance(mac_str, list) and len(mac_str) > 0:
+                    mac_str = mac_str[0]
+                # final label
+                host_label = f"h{mac_str}"
+    
             if not host_label:
                 continue
-
-            # Add the host as a node
+            
+            # Add the host
             self.topology.add_node(host_label, type="host")
-
-            # The switch label must match what we used in add_switch_links
+    
+            # The switch label
             switch_label = f"s{switch_dpid}"
-            # If the switch node doesn't exist yet, add it (just to ensure it’s in the graph)
             self.topology.add_node(switch_label, type="switch")
-
+    
             # Add edge host->switch
             self.topology.add_edge(
                 host_label,
