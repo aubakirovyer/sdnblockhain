@@ -1,41 +1,20 @@
 #!/usr/bin/env python3
 
-import re
 import json
 from web3 import Web3, HTTPProvider
 from visualize import FloodlightVisualizer
-
-"""
-token_manager.py
-
-1. Builds the network topology from Floodlight using FloodlightVisualizer.
-2. Extracts the host nodes and (optionally) their IP or MAC addresses.
-3. Connects to Ganache via Web3.py.
-4. Mints tokens (e.g., 1000 each) for those hosts on a simple 'MyToken' contract.
-
-Requirements:
- - Ganache running on port 8545
- - A deployed MyToken contract (address + ABI in build/contracts/MyToken.json)
- - 'visualizer.py' in same folder with the FloodlightVisualizer class
-"""
 
 def main():
     # 1) Build the network topology from Floodlight
     fv = FloodlightVisualizer()
     fv.build_topology()
 
-    # 2) Collect the hosts from the Graph
-    #    In your code, each host node label is like "h10.0.0.1" or "h00:00:00:00:00:01"
-    #    We'll store them in a list
-    host_labels = []
-    for node, data in fv.topology.nodes(data=True):
-        if data.get("type") == "host":
-            host_labels.append(node)  # e.g. "h10.0.0.1"
-
+    # 2) Collect the host labels
+    host_labels = [
+        node for node,data in fv.topology.nodes(data=True)
+        if data.get("type") == "host"
+    ]
     print("Discovered host labels:", host_labels)
-    # For demonstration, let's extract something from these labels
-    # e.g. if the label starts with 'h10.', treat it as an IP, else fallback to MAC
-    # In a real system, you might store these addresses differently.
 
     # 3) Connect to Ganache
     w3 = Web3(HTTPProvider("http://127.0.0.1:8545"))
@@ -43,74 +22,78 @@ def main():
         print("[Error] Could not connect to Ganache at 127.0.0.1:8545. Is it running?")
         return
 
+    # Let's see the chain ID Ganache is actually using
+    chain_id = w3.eth.chain_id
+    print("Ganache chain_id is:", chain_id)
+
     # 4) Load MyToken contract info (ABI + address)
-    #    Make sure you have previously run `truffle compile && truffle migrate`
     try:
-        with open("sdn-blockchain/build/contracts/MyToken.json") as f:
+        with open("sdn-blockchain/build/contracts/MyToken.json", "r") as f:
             contract_json = json.load(f)
     except FileNotFoundError:
-        print("[Error] Could not find build/contracts/MyToken.json - compile your contract first.")
+        print("[Error] Could not find build/contracts/MyToken.json. Did you run `truffle migrate`?")
         return
 
     abi = contract_json["abi"]
-    # The 'networks' field in MyToken.json might have the deployed address if using Truffle
-    # Otherwise, set it manually to the address from 'truffle migrate'
-    # Example: contract_address = "0x1234abcd..."
-    # We'll attempt to parse from "networks" if it exists:
     networks_info = contract_json.get("networks", {})
-    if not networks_info:
-        print("[Warning] No 'networks' info found, fallback to manual address.")
-        contract_address = "0x0000000000000000000000000000000000000000"
+
+    # 5) Dynamically pick the correct contract address
+    chain_id_str = str(chain_id)
+    if chain_id_str in networks_info:
+        # Great, the chain ID in Ganache matches an entry in MyToken.json
+        contract_address = networks_info[chain_id_str]["address"]
+        print(f"Found matching network ID {chain_id_str} in MyToken.json")
     else:
-        # Get the first network entry
-        # Alternatively, you can look up your specific network id
-        # e.g. if Ganache uses network_id=5777
-        network_id = list(networks_info.keys())[0]  # e.g. "5777"
-        contract_address = networks_info[network_id]["address"]
+        print(f"[Warning] No entry for chain ID {chain_id_str} in MyToken.json.")
+        print("Falling back to the last network entry found.")
+        # If there's at least one network entry, pick the last one
+        if networks_info:
+            # Sort keys or just pick the last. We'll pick last:
+            last_net_id = list(networks_info.keys())[-1]
+            contract_address = networks_info[last_net_id]["address"]
+            print(f"Using network {last_net_id} => address {contract_address}")
+        else:
+            # No network info at all
+            print("[Warning] `networks` is empty—no known contract address!")
+            contract_address = "0x0000000000000000000000000000000000000000"
 
     print("Using contract address:", contract_address)
     contract = w3.eth.contract(address=contract_address, abi=abi)
 
-    # 5) Use one of Ganache’s default accounts to pay for gas
-    #    If Ganache CLI gave us private keys, we can pick the first one.
-    #    Or if you use Ganache UI, you can copy a private key from the UI
-    #    For demonstration, place your private key here:
-    ganache_private_key = "0xABC123YOURKEY..."  # <-- replace with actual key
-
-    # Create a local 'Account' instance
+    # 6) Use one of Ganache’s default accounts to pay for gas
+    #    Replace with your actual private key
+    ganache_private_key = "0x116f0920050bfe8094772940079bb51f1ddf119649cc476b0f0dcdebd6a57d7b"  # e.g. from Ganache output
     acct = w3.eth.account.from_key(ganache_private_key)
     w3.eth.default_account = acct.address
 
-    # 6) For each host, let's produce an ephemeral "host address" (or real key)
-    #    Then mint tokens to it. We'll do 1000 tokens per host.
-    #    Realistically, each host would manage its own key, but this is a quick demo.
-    #    We'll store them in a dictionary for reference
+    # 7) For each host, create ephemeral addresses => mint tokens
     host_addresses = {}
     for label in host_labels:
-        # If label is like "h10.0.0.1", let's create an address
-        new_acct = w3.eth.account.create(label)  # seed with the label (just for reproducibility)
+        new_acct = w3.eth.account.create(label)  # seeded for reproducibility
         host_addresses[label] = new_acct.address
 
-    # 7) Mint tokens to each host’s address
     for label, host_addr in host_addresses.items():
-        # Build the transaction
+        # Build the mint transaction
         tx = contract.functions.mint(host_addr, 1000).build_transaction({
             'from': acct.address,
             'nonce': w3.eth.get_transaction_count(acct.address),
             'gas': 300000,
-            'gasPrice': w3.toWei('1', 'gwei'),
+            'gasPrice': w3.to_wei('1', 'gwei'),
         })
-        # Sign and send
+        # Sign & send
         signed_tx = acct.sign_transaction(tx)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        print(f"[Minted] 1000 tokens for {label} at {host_addr} in block {receipt.blockNumber} gasUsed={receipt.gasUsed}")
+        print(f"[Minted] 1000 tokens for {label} => {host_addr}, block {receipt.blockNumber}")
 
-    # 8) Show final balances
+    # 8) Query final balances
     for label, host_addr in host_addresses.items():
-        bal = contract.functions.balanceOf(host_addr).call()
-        print(f"{label} => {host_addr} has {bal} tokens")
-
+        try:
+            bal = contract.functions.balanceOf(host_addr).call()
+            print(f"{label} => {host_addr} has {bal} tokens")
+        except:
+            print(f"[Error] Could not read balanceOf({host_addr}). "
+                  "Is the contract address correct or function absent?")
 
 if __name__ == "__main__":
     main()
