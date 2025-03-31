@@ -3,9 +3,20 @@ services:
   floodlight-controller:
     image: piyushk2001/floodlight-controller
     container_name: floodlight-controller
-    # Expose Floodlight's web interface (8080) and OpenFlow channel (6653)
     ports:
       - "8080:8080"
       - "6653:6653"
-    # Ensures the container restarts automatically if it exits
+    restart: unless-stopped
+  containernet:
+    image: containernet/containernet
+    container_name: containernet
+    privileged: true
+    network_mode: "host"
+    pid: "host"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ulimits:
+      nofile:
+        soft: 524288
+        hard: 524288
     restart: unless-stopped

@@ -1,17 +1,8 @@
-#!/usr/bin/env bash
-#
 # Combined installation script for:
 #   1) Mininet
 #   2) Docker
 #   3) Floodlight (via Docker)
-#   4) Containernet
-#   5) Mininet-WiFi
-#   6) NPM + Ganache
-#
-# This script:
-#   - Logs ALL console output to install.log
-#   - Does NOT stop on errors; it keeps going and logs failures
-#   - Skips re-cloning if target directories already exist
+#   4) NPM + Ganache
 #
 # Usage:
 #   chmod +x install.sh
@@ -114,50 +105,41 @@ if [ $? -ne 0 ]; then
 fi
 
 # ------------------------------------------------------------------------------
-# 6) Containernet
-# ------------------------------------------------------------------------------
-echo ""
-echo "===== STEP 5: Containernet ====="
-if [ -d "$HOME/containernet" ]; then
-  echo "Containernet directory already exists. Skipping clone."
-else
-  echo "Cloning containernet repo..."
-  git clone https://github.com/containernet/containernet.git "$HOME/containernet"
-  if [ $? -ne 0 ]; then
-    echo "[ERROR] Cloning containernet repo failed."
-  fi
-fi
-
-echo "Running Ansible playbook for Containernet installation..."
-cd "$HOME" || true
-sudo ansible-playbook -i "localhost," -c local containernet/ansible/install.yml
-if [ $? -ne 0 ]; then
-  echo "[ERROR] Containernet installation failed."
-fi
-cd ~
-
-# ------------------------------------------------------------------------------
 # 7) Mininet-WiFi
 # ------------------------------------------------------------------------------
 echo ""
 echo "===== STEP 6: Mininet-WiFi ====="
-if [ -d "$HOME/mininet-wifi" ]; then
-  echo "Mininet-WiFi directory already exists. Skipping clone."
+
+# Instead of cloning into $HOME/mininet-wifi, clone locally in the current project dir.
+# We'll store the current script directory in a variable:
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"   # e.g. /home/user/Desktop/sdnblockhain
+
+MWIFI_DIR="${SCRIPT_DIR}/mininet-wifi"       # the local path for mininet-wifi
+
+if [ -d "$MWIFI_DIR" ]; then
+  echo "Mininet-WiFi directory already exists at: $MWIFI_DIR"
+  echo "Skipping clone."
 else
-  echo "Cloning Mininet-WiFi repo..."
-  git clone https://github.com/intrig-unicamp/mininet-wifi.git "$HOME/mininet-wifi"
+  echo "Cloning Mininet-WiFi repo into $MWIFI_DIR ..."
+  git clone https://github.com/intrig-unicamp/mininet-wifi.git "$MWIFI_DIR"
   if [ $? -ne 0 ]; then
     echo "[ERROR] Cloning Mininet-WiFi repo failed."
+    exit 1
   fi
 fi
 
-cd "$HOME/mininet-wifi" || true
+cd "$MWIFI_DIR" || exit
 echo "Installing Mininet-WiFi with 'sudo util/install.sh -Wlnfv'..."
 sudo util/install.sh -Wlnfv
 if [ $? -ne 0 ]; then
   echo "[ERROR] Mininet-WiFi installation failed."
+  exit 1
 fi
-cd ~
+
+# Step back to the project directory
+cd "$SCRIPT_DIR" || exit
+echo "Done installing Mininet-WiFi locally at $MWIFI_DIR"
+
 
 # ------------------------------------------------------------------------------
 # 8) Ganache (via NPM)
