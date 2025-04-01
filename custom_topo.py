@@ -4,6 +4,7 @@ from mn_wifi.cli import CLI
 from mn_wifi.link import wmediumd
 from mn_wifi.wmediumdConnector import interference
 from mininet.node import RemoteController
+from containernet.mininet.node import Docker as DockerHost
 
 # Uncomment the following only if you have a merged environment of mininet-wifi + containernet
 # from containernet.node import DockerHost
@@ -81,7 +82,6 @@ def run_topology():
     net.addLink(ap2, s9)
 
     # (Optional) If you have a merged mininet-wifi + containernet environment:
-    """
     info("*** Creating a Docker-based host ***\n")
     d1 = net.addHost('d1',
                      cls=DockerHost,
@@ -89,7 +89,6 @@ def run_topology():
                      docker_args={'cpus': '0.5'})
     # Link that Docker host to, say, s1 (top-left corner)
     net.addLink(d1, switches[0][0])
-    """
 
     info("*** Starting network ***\n")
     net.start()

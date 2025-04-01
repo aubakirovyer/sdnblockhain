@@ -5,7 +5,7 @@ services:
     container_name: floodlight-controller
     ports:
       - "8080:8080"
-      - "6653:6653"
+      - "6654:6654"
     restart: unless-stopped
   containernet:
     image: containernet/containernet
