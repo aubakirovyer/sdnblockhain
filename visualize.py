@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-
 import requests
 import networkx as nx
-# import matplotlib.pyplot as plt
-# modified matplotlib import to not cause crash in ubuntu 22.04 gnome GTK4 environment
 import matplotlib
-matplotlib.use('TkAgg') 
+matplotlib.use('TkAgg')  # so it doesn't cause crash in ubuntu 22.04 gnome etc.
 import matplotlib.pyplot as plt
 
 class FloodlightVisualizer:
     """
     Fetches topology from Floodlight and visualizes it with NetworkX.
+    Differentiates between switches, Wi-Fi APs, Docker-based hosts, stations, etc.
     """
 
     def __init__(
@@ -21,6 +19,7 @@ class FloodlightVisualizer:
         self.device_url = device_url
         self.links_url  = links_url
 
+        # We'll store a single undirected graph
         self.topology   = nx.Graph()
 
     def fetch_json(self, url):
@@ -73,109 +72,33 @@ class FloodlightVisualizer:
             self.topology.add_node(src_label, type="switch")
             self.topology.add_node(dst_label, type="switch")
 
+            # Attempt to parse link_type
+            link_type = link.get("type", "")  # e.g. "internal" or "external"
+            direction = link.get("direction", "")  # "bidirectional"?
+
             # Add an edge for the link
             self.topology.add_edge(
                 src_label,
                 dst_label,
                 src_port=link.get("src-port"),
                 dst_port=link.get("dst-port"),
-                link_type=link.get("type"),
-                direction=link.get("direction")
+                link_type=link_type,
+                direction=direction
             )
 
-    # def add_hosts(self):
-    #     """
-    #     Reads /wm/device/ data, and for each discovered host with a valid
-    #     attachmentPoint, adds an edge host->switch.
-
-    #     - Host labeled as "h{ip}"
-    #     - Switch labeled as "s{dpid}"
-    #     """
-    #     data = self.fetch_json(self.device_url)
-    #     if not data:
-    #         print("[Warning] /wm/device/ returned no data. No hosts added.")
-    #         return
-
-    #     # Some Floodlight versions respond with a list of devices directly
-    #     # Others respond with { "devices": [ ... ] }
-    #     if isinstance(data, dict) and "devices" in data:
-    #         devices = data["devices"]
-    #     elif isinstance(data, list):
-    #         devices = data
-    #     else:
-    #         # Unknown shape
-    #         print("[Warning] /wm/device/ had an unexpected JSON shape. No hosts added.")
-    #         return
-
-    #     for dev in devices:
-    #         # dev might be something like:
-    #         # {
-    #         #   "mac": "00:00:00:00:00:01",
-    #         #   "ipv4": [ "10.0.0.1" ],
-    #         #   "ipv6": [],
-    #         #   "vlan": [ "none" ],
-    #         #   "attachmentPoint": [
-    #         #       {
-    #         #         "switch": "00:00:00:00:00:00:00:01" OR "switchDPID": "00:...",
-    #         #         "port": 1
-    #         #       }
-    #         #   ],
-    #         #   ...
-    #         # }
-    #         if not isinstance(dev, dict):
-    #             continue
-
-    #         # MAC is optional in some builds, but let's see if it’s present
-    #         mac = dev.get("mac", "")
-    #         # IPv4 might be a list
-    #         ipv4_list = dev.get("ipv4", [])
-
-    #         # Must have an attachmentPoint
-    #         ap_list = dev.get("attachmentPoint", [])
-    #         if not ap_list or not isinstance(ap_list, list):
-    #             continue
-
-    #         # We'll take just the first AP
-    #         ap = ap_list[0]
-    #         # Some versions call it "switch", others "switchDPID"
-    #         switch_dpid = ap.get("switch") or ap.get("switchDPID")
-    #         port = ap.get("port")
-
-    #         if not switch_dpid or port is None:
-    #             # Invalid / incomplete
-    #             continue
-
-    #         # If we have no IPv4 address, skip, or we can fallback to MAC-based labeling
-    #         if len(ipv4_list) == 0:
-    #             # fallback to host label by mac
-    #             host_label = f"h{mac}" if mac else None
-    #         else:
-    #             host_label = f"h{ipv4_list[0]}"
-
-    #         if not host_label:
-    #             continue
-
-    #         # Add the host as a node
-    #         self.topology.add_node(host_label, type="host")
-
-    #         # The switch label must match what we used in add_switch_links
-    #         switch_label = f"s{switch_dpid}"
-    #         # If the switch node doesn't exist yet, add it (just to ensure it’s in the graph)
-    #         self.topology.add_node(switch_label, type="switch")
-
-    #         # Add edge host->switch
-    #         self.topology.add_edge(
-    #             host_label,
-    #             switch_label,
-    #             port=port
-    #         )
-
     def add_hosts(self):
+        """
+        Reads /wm/device/ data, and for each discovered host with a valid
+        attachmentPoint, adds an edge host->switch.
+
+        - Host labeled as "h{ip}" or "h{mac}" if no IP
+        - Switch labeled as "s{dpid}"
+        """
         data = self.fetch_json(self.device_url)
         if not data:
             print("[Warning] /wm/device/ returned no data. No hosts added.")
             return
-    
+
         # Some Floodlight versions respond with a list of devices or { "devices": [...] }
         if isinstance(data, dict) and "devices" in data:
             devices = data["devices"]
@@ -184,22 +107,17 @@ class FloodlightVisualizer:
         else:
             print("[Warning] /wm/device/ had an unexpected JSON shape. No hosts added.")
             return
-    
+
         for dev in devices:
-            # dev might be something like:
-            #  {
-            #    "mac": "22:a6:26:68:e1:4e",
-            #    "ipv4": [],
-            #    "ipv6": ["fe80::20a6:26ff:fe68:e14e"],
-            #    "attachmentPoint": [ { "switch": "00:00:00:00:00:00:01:03", "port": 1 }, ...],
-            #    ...
-            #  }
+            # e.g. { "mac":"00:11:22:33:44:55",
+            #        "ipv4":["10.0.0.1"],
+            #        "attachmentPoint":[{"switchDPID":"00:00:00:00:00:00:00:01","port":1}] }
             if not isinstance(dev, dict):
                 continue
             
-            mac_str = dev.get("mac", "")  # e.g. "22:a6:26:68:e1:4e"
+            mac_str = dev.get("mac", "")
             ipv4_list = dev.get("ipv4", [])
-    
+
             # Must have an attachmentPoint
             ap_list = dev.get("attachmentPoint", [])
             if not ap_list or not isinstance(ap_list, list):
@@ -208,33 +126,29 @@ class FloodlightVisualizer:
             ap = ap_list[0]
             switch_dpid = ap.get("switch") or ap.get("switchDPID")
             port = ap.get("port")
-    
+
             if not switch_dpid or port is None:
                 continue
-            
-            # Build the host label:
-            # If IPv4 is present, label "h10.0.0.X", else fallback to "hMAC"
+
+            # Build the host label
             if ipv4_list:
                 host_label = f"h{ipv4_list[0]}"
             else:
-                # fallback to MAC if no IPv4
-                # remove any bracket or quote artifacts if they exist
-                # (some versions of Floodlight might return an array for 'mac'; normally it's just a string)
+                # fallback to "hMAC"
                 if isinstance(mac_str, list) and len(mac_str) > 0:
                     mac_str = mac_str[0]
-                # final label
                 host_label = f"h{mac_str}"
-    
+
             if not host_label:
                 continue
-            
+
             # Add the host
             self.topology.add_node(host_label, type="host")
-    
+
             # The switch label
             switch_label = f"s{switch_dpid}"
             self.topology.add_node(switch_label, type="switch")
-    
+
             # Add edge host->switch
             self.topology.add_edge(
                 host_label,
@@ -249,21 +163,86 @@ class FloodlightVisualizer:
         self.add_switch_links()
         self.add_hosts()
 
+        # Optionally classify APs, Docker, stations, etc. from names:
+        self.classify_nodes()
+
+    def classify_nodes(self):
+        """
+        Based on naming conventions, assign 'type' to differentiate AP, station, docker host, etc.
+        This is purely local heuristic - Floodlight doesn't provide this data.
+        """
+        for node_name, data in self.topology.nodes(data=True):
+            # If we already have a 'type' that says "switch" or "host", keep it
+            # But we can refine if the name suggests it's an AP or station
+            # or Docker host
+            node_type = data.get("type", "unknown")
+
+            # If it's "switch" but name starts with 'ap', call it an AP
+            if node_name.startswith('ap'):
+                data["type"] = "ap"
+            elif node_name.startswith('sta'):
+                data["type"] = "station"
+            elif node_name.startswith('d'):
+                data["type"] = "dockerhost"
+            # If it's e.g. "s1" or "s00:00:...", keep it as "switch"
+            # If it's e.g. "h10.0.0.1", keep it as "host" unless we see a reason not to
+            # If it doesn't match anything, we let the existing or "host" stand.
+            # else:
+            #     # keep the existing data["type"]
+            #     pass
+
     def draw_topology(self):
         """
         Draw the built topology with matplotlib.
-        Switches are squares, hosts are circles.
+        We'll color/symbol for each distinct 'type'.
         """
         plt.figure(figsize=(8,6))
 
-        # Simple layout
+        # A layout
         pos = nx.spring_layout(self.topology, k=0.5, seed=42)
 
-        # Separate switch nodes and host nodes
+        # We'll create sub-lists by type
+        ap_nodes     = [n for n,d in self.topology.nodes(data=True) if d.get("type") == "ap"]
+        station_nodes= [n for n,d in self.topology.nodes(data=True) if d.get("type") == "station"]
+        docker_nodes = [n for n,d in self.topology.nodes(data=True) if d.get("type") == "dockerhost"]
         switch_nodes = [n for n,d in self.topology.nodes(data=True) if d.get("type") == "switch"]
-        host_nodes   = [n for n,d in self.topology.nodes(data=True) if d.get("type") == "host"]
+        host_nodes   = [n for n,d in self.topology.nodes(data=True)
+                        if d.get("type") == "host" or d.get("type") == "unknown"]
 
-        # Draw switches
+        # Draw APs as pentagon (p), orange
+        nx.draw_networkx_nodes(
+            self.topology,
+            pos,
+            nodelist=ap_nodes,
+            node_color="orange",
+            node_shape="p",
+            node_size=700,
+            label="Wi-Fi AP"
+        )
+
+        # Draw stations as diamond (D), purple
+        nx.draw_networkx_nodes(
+            self.topology,
+            pos,
+            nodelist=station_nodes,
+            node_color="violet",
+            node_shape="D",
+            node_size=600,
+            label="Station"
+        )
+
+        # Draw docker hosts as triangle (v), yellow
+        nx.draw_networkx_nodes(
+            self.topology,
+            pos,
+            nodelist=docker_nodes,
+            node_color="yellow",
+            node_shape="v",
+            node_size=600,
+            label="Docker Host"
+        )
+
+        # Draw switches as squares (s), skyblue
         nx.draw_networkx_nodes(
             self.topology,
             pos,
@@ -274,7 +253,7 @@ class FloodlightVisualizer:
             label="Switches"
         )
 
-        # Draw hosts
+        # Draw normal hosts as circles (o), lightgreen
         nx.draw_networkx_nodes(
             self.topology,
             pos,
@@ -285,13 +264,26 @@ class FloodlightVisualizer:
             label="Hosts"
         )
 
-        # Draw edges
-        nx.draw_networkx_edges(self.topology, pos, width=1.5, edge_color="gray")
+        # We also color edges differently if they are e.g. "internal" vs "external"
+        # If "type" is not present, default gray
+        color_map = {
+            "internal": "blue",
+            "external": "red",
+            # default => "gray"
+        }
+        edge_colors = []
+        for u,v,edata in self.topology.edges(data=True):
+            link_t = edata.get("link_type", "none")
+            edge_colors.append(color_map.get(link_t, "gray"))
+
+        nx.draw_networkx_edges(
+            self.topology, pos, width=2, edge_color=edge_colors
+        )
 
         # Label them
         nx.draw_networkx_labels(self.topology, pos, font_size=8, font_color="black")
 
-        plt.title("Floodlight Network Topology")
+        plt.title("Floodlight + Mininet-WiFi + Docker Topology")
         plt.axis("off")
         plt.legend()
         plt.show()
@@ -321,9 +313,10 @@ if __name__ == "__main__":
     fv.build_topology()
 
     # Example: find shortest path between two host IP nodes
-    path = fv.find_shortest_path("h10.0.0.1", "h10.0.0.3")
+    # e.g. "h10.0.0.1" or "ap1", "sta2", etc.
+    path = fv.find_shortest_path("ap1", "sta2")
     if path:
-        print("Shortest path from h10.0.0.1 to h10.0.0.3:", path)
+        print("Shortest path from ap1 to sta2:", path)
 
     # Visualize it
     fv.draw_topology()
