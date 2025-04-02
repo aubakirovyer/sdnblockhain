@@ -83,6 +83,11 @@ def run_topology():
 
     # (Optional) If you have a merged mininet-wifi + containernet environment:
     info("*** Creating a Docker-based host ***\n")
+    # d1 = net.addHost('d1',
+    #                  cls=DockerHost,
+    #                  dimage='ubuntu:latest',
+    #                  docker_args={'cpus': '0.5'},
+    #                  rm=True,)
     d1 = net.addHost('d1',
                      cls=DockerHost,
                      dimage='ubuntu:latest',
