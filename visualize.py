@@ -6,11 +6,6 @@ matplotlib.use('TkAgg')  # so it doesn't cause crash in ubuntu 22.04 gnome etc.
 import matplotlib.pyplot as plt
 
 class FloodlightVisualizer:
-    """
-    Fetches topology from Floodlight and visualizes it with NetworkX.
-    Differentiates between switches, Wi-Fi APs, Docker-based hosts, stations, etc.
-    """
-
     def __init__(
         self,
         device_url="http://localhost:8080/wm/device/",
@@ -23,10 +18,6 @@ class FloodlightVisualizer:
         self.topology   = nx.Graph()
 
     def fetch_json(self, url):
-        """
-        Safely fetch JSON from a given URL, handling errors.
-        Returns Python data (list or dict), or None if something failed.
-        """
         try:
             resp = requests.get(url, timeout=5)
         except requests.exceptions.RequestException as e:
@@ -47,10 +38,6 @@ class FloodlightVisualizer:
             return None
 
     def add_switch_links(self):
-        """
-        Reads /wm/topology/links/json and adds switch-to-switch edges.
-        Switch node labeled as: s{dpid}
-        """
         data = self.fetch_json(self.links_url)
         if not data or not isinstance(data, list):
             print("[Warning] /wm/topology/links/json did not return a list. No switch links added.")
@@ -87,13 +74,6 @@ class FloodlightVisualizer:
             )
 
     def add_hosts(self):
-        """
-        Reads /wm/device/ data, and for each discovered host with a valid
-        attachmentPoint, adds an edge host->switch.
-
-        - Host labeled as "h{ip}" or "h{mac}" if no IP
-        - Switch labeled as "s{dpid}"
-        """
         data = self.fetch_json(self.device_url)
         if not data:
             print("[Warning] /wm/device/ returned no data. No hosts added.")
@@ -157,9 +137,6 @@ class FloodlightVisualizer:
             )
 
     def build_topology(self):
-        """
-        Main function to build the topology from Floodlight data.
-        """
         self.add_switch_links()
         self.add_hosts()
 
@@ -167,10 +144,6 @@ class FloodlightVisualizer:
         self.classify_nodes()
 
     def classify_nodes(self):
-        """
-        Based on naming conventions, assign 'type' to differentiate AP, station, docker host, etc.
-        This is purely local heuristic - Floodlight doesn't provide this data.
-        """
         for node_name, data in self.topology.nodes(data=True):
             # If we already have a 'type' that says "switch" or "host", keep it
             # But we can refine if the name suggests it's an AP or station
@@ -192,10 +165,6 @@ class FloodlightVisualizer:
             #     pass
 
     def draw_topology(self):
-        """
-        Draw the built topology with matplotlib.
-        We'll color/symbol for each distinct 'type'.
-        """
         plt.figure(figsize=(8,6))
 
         # A layout
@@ -289,10 +258,6 @@ class FloodlightVisualizer:
         plt.show()
 
     def find_shortest_path(self, src_label, dst_label):
-        """
-        Attempt a shortest path in the built graph from src_label to dst_label.
-        Returns the path as a list of nodes, or None if not found.
-        """
         if src_label not in self.topology:
             print(f"[Error] Source node {src_label} not in graph.")
             return None

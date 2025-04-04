@@ -112,34 +112,35 @@ echo "===== STEP 6: Mininet-WiFi ====="
 
 # Instead of cloning into $HOME/mininet-wifi, clone locally in the current project dir.
 # We'll store the current script directory in a variable:
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"   # e.g. /home/user/Desktop/sdnblockhain
+# SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"   # e.g. /home/user/Desktop/sdnblockhain
 
-MWIFI_DIR="${SCRIPT_DIR}/mininet-wifi"       # the local path for mininet-wifi
+# MWIFI_DIR="${SCRIPT_DIR}/mininet-wifi"       # the local path for mininet-wifi
 
-if [ -d "$MWIFI_DIR" ]; then
-  echo "Mininet-WiFi directory already exists at: $MWIFI_DIR"
-  echo "Skipping clone."
-else
-  echo "Cloning Mininet-WiFi repo into $MWIFI_DIR ..."
-  git clone https://github.com/intrig-unicamp/mininet-wifi.git "$MWIFI_DIR"
-  if [ $? -ne 0 ]; then
-    echo "[ERROR] Cloning Mininet-WiFi repo failed."
-    exit 1
-  fi
-fi
+# if [ -d "$MWIFI_DIR" ]; then
+#   echo "Mininet-WiFi directory already exists at: $MWIFI_DIR"
+#   echo "Skipping clone."
+# else
+#   echo "Cloning Mininet-WiFi repo into $MWIFI_DIR ..."
+#   git clone https://github.com/intrig-unicamp/mininet-wifi.git "$MWIFI_DIR"
+#   if [ $? -ne 0 ]; then
+#     echo "[ERROR] Cloning Mininet-WiFi repo failed."
+#     exit 1
+#   fi
+# fi
 
-cd "$MWIFI_DIR" || exit
-echo "Installing Mininet-WiFi with 'sudo util/install.sh -Wlnfv'..."
-sudo util/install.sh -Wlnfv
-if [ $? -ne 0 ]; then
-  echo "[ERROR] Mininet-WiFi installation failed."
-  exit 1
-fi
+# cd "$MWIFI_DIR" || exit
+# echo "Installing Mininet-WiFi with 'sudo util/install.sh -Wlnfv'..."
+# sudo util/install.sh -Wlnfv
+# if [ $? -ne 0 ]; then
+#   echo "[ERROR] Mininet-WiFi installation failed."
+#   exit 1
+# fi
 
-# Step back to the project directory
-cd "$SCRIPT_DIR" || exit
-echo "Done installing Mininet-WiFi locally at $MWIFI_DIR"
+# # Step back to the project directory
+# cd "$SCRIPT_DIR" || exit
+# echo "Done installing Mininet-WiFi locally at $MWIFI_DIR"
 
+# DO A MANUAL INSTALLATION OF MININET-WIFI WITH CONTAINERNET
 
 # ------------------------------------------------------------------------------
 # 8) Ganache (via NPM)

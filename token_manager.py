@@ -62,7 +62,7 @@ def main():
 
     # 6) Use one of Ganache’s default accounts to pay for gas
     #    Replace with your actual private key
-    ganache_private_key = "0x116f0920050bfe8094772940079bb51f1ddf119649cc476b0f0dcdebd6a57d7b"  # e.g. from Ganache output
+    ganache_private_key = "0xa52f97a5edd5fb284bb61f789b36a5e74fbaf0a0d229e6836f3df9d19ee17310"  # e.g. from Ganache output
     acct = w3.eth.account.from_key(ganache_private_key)
     w3.eth.default_account = acct.address
 
