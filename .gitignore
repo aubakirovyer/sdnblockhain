@@ -5,6 +5,7 @@ mininet-wifi/
 mac80211_hwsim_mgmt/
 wmediumd/
 openflow/
+containernet/
 container/
 
 # Or you can be more selective:
