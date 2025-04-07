@@ -6,6 +6,8 @@ from mn_wifi.wmediumdConnector import interference
 from mininet.node import RemoteController
 # from containernet.mininet.node import Docker as DockerHost
 from containernet.node import Docker as DockerContainer
+# from containernet.mininet.node import Docker as DockerHost
+from containernet.node import Docker as DockerHost
 # Uncomment the following only if you have a merged environment of mininet-wifi + containernet
 # from containernet.node import DockerHost
 
