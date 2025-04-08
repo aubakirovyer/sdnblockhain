@@ -277,10 +277,85 @@ class FloodlightVisualizer:
             print(f"[Error] Destination node {dst_label} not in graph.")
             return None
         try:
-            return nx.shortest_path(self.topology, src_label, dst_label)
+            return list(nx.all_shortest_paths(self.topology, src_label, dst_label))
         except nx.NetworkXNoPath:
             print(f"[Error] No path between {src_label} and {dst_label}")
             return None
+
+    def build_switch_mapping(self):
+        """Build a dictionary mapping each switch label to a list of tuples (neighbor_switch, port)"""
+        mapping = {}
+        for u, v, data in self.topology.edges(data=True):
+            # Only consider edges where both nodes are switches.
+            if self.topology.nodes[u].get("type") == "switch" and self.topology.nodes[v].get("type") == "switch":
+                if u not in mapping:
+                    mapping[u] = []
+                if v not in mapping:
+                    mapping[v] = []
+                # For the edge from u to v, assume u's interface is named using data 'src_port'
+                mapping[u].append((v, data.get("src_port")))
+                # And for edge from v to u, use 'dst_port'
+                mapping[v].append((u, data.get("dst_port")))
+        return mapping
+
+
+    def compute_path_cost(self, bandwidth_urls) -> int:
+        total_cost = 0
+        for bandwidth_url in bandwidth_urls:
+            port_info = self.fetch_json(bandwidth_url)[0]
+            # Assume port_info is a DataFrame with one row, and extract the values.
+            rx = int(port_info['bits-per-second-rx'])
+            tx = int(port_info['bits-per-second-tx'])
+            total_cost += abs(rx - tx)
+        return total_cost
+
+        
+
+    def find_optimal_path(self, src_host, dst_host) -> list:
+        shortest_paths = self.find_shortest_path(src_host, dst_host)
+        if not shortest_paths:
+            return ["NO OPTIMAL PATH"]
+
+        # Build the mapping from switches to their neighbors and port numbers
+        switch_mapping = self.build_switch_mapping()
+
+        optimal_paths = []
+        min_cost = float('inf')
+
+        # Evaluate each candidate shortest path.
+        for path in shortest_paths:
+            # Extract only the switch nodes (ignore source host and destination host).
+            switches_in_path = path[1:-1]
+            # Build a list of bandwidth URLs for each adjacent switch pair.
+            bandwidth_urls = []
+            for i in range(len(switches_in_path) - 1):
+                src_switch = switches_in_path[i]
+                dst_switch = switches_in_path[i+1]
+                found = False
+                # Look up the port for the link from src_switch to dst_switch
+                if src_switch in switch_mapping:
+                    for (neighbor, port) in switch_mapping[src_switch]:
+                        if neighbor == dst_switch:
+                            # The Floodlight REST API expects the switch ID without the "s" prefix.
+                            bandwidth_urls.append(f"http://localhost:8080/wm/statistics/bandwidth/{src_switch[1:]}/{port}/json")
+                            found = True
+                            break
+                if not found:
+                    print(f"[Warning] Could not find port info for link {src_switch} -> {dst_switch}")
+
+            # Compute the cost (sum of absolute differences between rx and tx)
+            local_cost = self.compute_path_cost(bandwidth_urls)
+            print("Cost for path:", local_cost)
+
+            # Update the optimal paths based on cost comparison.
+            if local_cost < min_cost:
+                min_cost = local_cost
+                optimal_paths = [path]
+            elif local_cost == min_cost:
+                optimal_paths.append(path)
+
+        return optimal_paths
+
 
 # EXAMPLE USAGE
 if __name__ == "__main__":
@@ -308,8 +383,13 @@ if __name__ == "__main__":
     fv.build_topology()
 
     # Now we can do find_shortest_path("ap1", "sta2"), for example
-    path = fv.find_shortest_path("ap1", "sta2")
+    path = fv.find_shortest_path("h10.0.0.1", "d1")
     if path:
-        print("Path from ap1 to sta2:", path)
+        print("Path from h1 to d1:", path)
+
+    optimal_path = fv.find_optimal_path("h10.0.0.1", "d1")
+    if optimal_path:
+        print("Optimal Path from h1 to d1:", optimal_path)
+    #print(fv.topology)
 
     fv.draw_topology()
