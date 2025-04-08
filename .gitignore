@@ -1,13 +1,16 @@
 # .gitignore
-
+# ignore .apconf files created by topology
+*.apconf
 # Ignore the entire mininet-wi-fi folder
 mininet-wifi/
 mac80211_hwsim_mgmt/
 wmediumd/
 openflow/
+container/
 containernet/
 container/
 
+params/
 # Or you can be more selective:
 # mininet-wifi/__pycache__/
 # mininet-wifi/logs/
